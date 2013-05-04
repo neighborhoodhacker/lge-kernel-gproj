@@ -379,6 +379,7 @@ extern struct cpufreq_governor cpufreq_gov_conservative;
 extern struct cpufreq_governor cpufreq_gov_interactive;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_interactive)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SMARTMAX)
 extern struct cpufreq_governor cpufreq_gov_smartmax;
@@ -391,6 +392,11 @@ extern struct cpufreq_governor cpufreq_gov_intellidemand;
 extern struct cpufreq_governor cpufreq_gov_ondemandplus;
 #define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_ondemandplus)
 >>>>>>> 653ac49... Add ONDEMANDPLUS Governor
+=======
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_SMARTMAX)
+extern struct cpufreq_governor cpufreq_gov_smartmax;
+#define CPUFREQ_DEFAULT_GOVERNOR        (&cpufreq_gov_smartmax)
+>>>>>>> 14cb622... cpufreq: add SmartMAX governor thanks to MAXWEN
 #endif
 
 
