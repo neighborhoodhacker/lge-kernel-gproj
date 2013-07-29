@@ -404,8 +404,6 @@ void ddl_release_client_internal_buffers(struct ddl_client_context *ddl)
 		encoder->dynamic_prop_change = 0;
 		ddl_free_enc_hw_buffers(ddl);
 	}
-	ddl_pmem_free(&ddl->shared_mem[0]);
-	ddl_pmem_free(&ddl->shared_mem[1]);
 }
 
 u32 ddl_codec_type_transact(struct ddl_client_context *ddl,
@@ -505,6 +503,8 @@ u32 ddl_get_yuv_buf_size(u32 width, u32 height, u32 format)
 
 	width_round_up  = width;
 	height_round_up = height;
+	align = SZ_4K;
+
 	if (format == DDL_YUV_BUF_TYPE_TILE) {
 		width_round_up  = DDL_ALIGN(width, DDL_TILE_ALIGN_WIDTH);
 		height_round_up = DDL_ALIGN(height, DDL_TILE_ALIGN_HEIGHT);
@@ -618,23 +618,17 @@ void ddl_calc_dec_hw_buffers_size(enum vcd_codec codec, u32 width,
 			(codec == VCD_CODEC_DIVX_6) ||
 			(codec == VCD_CODEC_XVID) ||
 			(codec == VCD_CODEC_H263)) {
-			u32 val = DDL_MAX(DDL_MAX_FRAME_WIDTH,
-				DDL_MAX_FRAME_HEIGHT);
-			sz_sub_anchor_mv = DDL_ALIGN(((val >> 4) * 128 * 2 * 8),
-				DDL_LINEAR_BUFFER_ALIGN_BYTES);
 			sz_nb_dcac = DDL_KILO_BYTE(16);
 			sz_upnb_mv = DDL_KILO_BYTE(68);
+			sz_sub_anchor_mv = DDL_KILO_BYTE(136);
 			sz_overlap_xform = DDL_KILO_BYTE(32);
 			if (codec != VCD_CODEC_H263)
 				sz_stx_parser = DDL_KILO_BYTE(68);
 		} else if ((codec == VCD_CODEC_VC1) ||
 			(codec == VCD_CODEC_VC1_RCV)) {
-			u32 val = DDL_MAX(DDL_MAX_FRAME_WIDTH,
-				DDL_MAX_FRAME_HEIGHT);
-			sz_sub_anchor_mv = DDL_ALIGN(((val >> 4) * 128 * 2 * 8),
-				DDL_LINEAR_BUFFER_ALIGN_BYTES);
 			sz_nb_dcac = DDL_KILO_BYTE(16);
 			sz_upnb_mv = DDL_KILO_BYTE(68);
+			sz_sub_anchor_mv = DDL_KILO_BYTE(136);
 			sz_overlap_xform = DDL_KILO_BYTE(32);
 			sz_bit_plane3 = DDL_KILO_BYTE(2);
 			sz_bit_plane2 = DDL_KILO_BYTE(2);
@@ -818,13 +812,13 @@ u32 ddl_calc_enc_hw_buffers_size(enum vcd_codec codec, u32 width,
 		height, DDL_YUV_BUF_TYPE_TILE);
 	sz_dpb_c = ddl_get_yuv_buf_size(width, height>>1,
 		DDL_YUV_BUF_TYPE_TILE);
-	if (input_format ==
-		VCD_BUFFER_FORMAT_NV12_16M2KA) {
+	if ((input_format == VCD_BUFFER_FORMAT_NV12_16M2KA) ||
+		(input_format == VCD_BUFFER_FORMAT_NV21_16M2KA)) {
 		sz_cur_y = ddl_get_yuv_buf_size(width, height,
 			DDL_YUV_BUF_TYPE_LINEAR);
 		sz_cur_c = ddl_get_yuv_buf_size(width, height>>1,
 			DDL_YUV_BUF_TYPE_LINEAR);
-	} else if (VCD_BUFFER_FORMAT_TILE_4x2 == input_format) {
+	} else if (input_format == VCD_BUFFER_FORMAT_TILE_4x2) {
 		sz_cur_y = sz_dpb_y;
 		sz_cur_c = sz_dpb_c;
 	} else
@@ -1005,7 +999,7 @@ void ddl_decoder_chroma_dpb_change(struct ddl_client_context *ddl)
 	u32 luma_size, i, dpb;
 	luma_size = decoder->dpb_buf_size.size_y;
 	dpb = decoder->dp_buf.no_of_dec_pic_buf;
-	DDL_MSG_HIGH("%s Decoder num DPB buffers = %u Luma Size = %u",
+	DDL_MSG_HIGH("%s Decoder num DPB buffers = %u Luma Size = %u"
 			 __func__, dpb, luma_size);
 	if (dpb > DDL_MAX_BUFFER_COUNT)
 		dpb = DDL_MAX_BUFFER_COUNT;
@@ -1060,23 +1054,6 @@ u32 ddl_check_reconfig(struct ddl_client_context *ddl)
 			decoder->progressive_only)
 				need_reconfig = false;
 	}
-	DDL_MSG_HIGH("%s(): need_reconfig = %u, cont_mode = %u\n"\
-	"Actual: WxH = %ux%u, SxSH = %ux%u, sz = %u, min = %u, act = %u\n"\
-	"Client: WxH = %ux%u, SxSH = %ux%u, sz = %u, min = %u, act = %u\n",
-	__func__, need_reconfig, decoder->cont_mode,
-	decoder->frame_size.width, decoder->frame_size.height,
-	decoder->frame_size.stride, decoder->frame_size.scan_lines,
-	decoder->actual_output_buf_req.sz,
-	decoder->actual_output_buf_req.min_count,
-	decoder->actual_output_buf_req.actual_count,
-	decoder->client_frame_size.width,
-	decoder->client_frame_size.height,
-	decoder->client_frame_size.stride,
-	decoder->client_frame_size.scan_lines,
-	decoder->client_output_buf_req.sz,
-	decoder->client_output_buf_req.min_count,
-	decoder->client_output_buf_req.actual_count);
-
 	return need_reconfig;
 }
 
