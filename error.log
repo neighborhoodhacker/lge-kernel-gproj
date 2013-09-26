@@ -1,0 +1,8 @@
+WARNING: vmlinux.o(.text+0x4e65a8): Section mismatch in reference from the function do_dbs_timer() to the function .cpuinit.text:cpu_up()
+The function do_dbs_timer() references
+the function __cpuinit cpu_up().
+This is often because do_dbs_timer lacks a __cpuinit 
+annotation or the annotation of cpu_up is wrong.
+
+make[1]: *** [vmlinux.o] Error 1
+make: *** [vmlinux.o] Error 2

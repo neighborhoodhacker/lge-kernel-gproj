@@ -141,6 +141,10 @@
 #define PCIE_PWR_EN_PMIC_GPIO 13
 #define PCIE_RST_N_PMIC_MPP 1
 
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+int id_set_two_phase_freq(int cpufreq);
+#endif 
+
 #ifdef CONFIG_KERNEL_MSM_CONTIG_MEM_REGION
 static unsigned msm_contig_mem_size = MSM_CONTIG_MEM_SIZE;
 static int __init msm_contig_mem_size_setup(char *p)
@@ -2050,8 +2054,7 @@ static void __init apq8064_init_irq(void)
 #endif
 
 	msm_mpm_irq_extn_init(data);
-	gic_init(0, GIC_PPI_START, MSM_QGIC_DIST_BASE,
-						(void *)MSM_QGIC_CPU_BASE);
+	gic_init(0, GIC_PPI_START, MSM_QGIC_DIST_BASE, (void *)MSM_QGIC_CPU_BASE);
 }
 
 #ifdef LGE_PRECS2_MIG
@@ -3874,6 +3877,9 @@ static void __init apq8064_rumi3_init(void)
 
 static void __init apq8064_cdp_init(void)
 {
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+  	id_set_two_phase_freq(1134000);
+#endif 
 	if (meminfo_init(SYS_MEMORY, SZ_256M) < 0)
 		pr_err("meminfo_init() failed!\n");
 	if (machine_is_apq8064_mtp() &&
