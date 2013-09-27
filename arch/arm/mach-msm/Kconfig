@@ -1631,11 +1631,17 @@ config MSM_CPU_FREQ_MIN
 
 endif # CPU_FREQ_MSM
 
+config INTELLI_PLUG
+  bool "Enable intelli-plug cpu hotplug driver"
+  default n
+  help
+    Generic Intelli-plug cpu hotplug driver for ARM SOCs
+
 config CPU_OVERCLOCK
-bool "Enable CPU Overclocking option"
-default n
-help
-Krait overclocking up to 1.71 GHz
+  bool "Enable CPU Overclocking option"
+  default n
+  help
+   Krait overclocking up to 1.71 GHz
 
 config MSM_AVS_HW
 	bool "Enable Adaptive Voltage Scaling (AVS)"

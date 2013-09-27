@@ -2027,7 +2027,7 @@ static struct msm_thermal_data msm_thermal_pdata = {
 #else
 	.poll_ms = 250,
 #ifdef CONFIG_CPU_OVERCLOCK
-	.limit_temp_degC = 70,
+	.limit_temp_degC = 75,
 #else
 	.limit_temp_degC = 60,
 #endif

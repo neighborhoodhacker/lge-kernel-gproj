@@ -5,6 +5,7 @@
  *            (C)  2003 Venkatesh Pallipadi <venkatesh.pallipadi@intel.com>.
  *                      Jun Nakajima <jun.nakajima@intel.com>
  *            (C)  2012 Paul Reioux <reioux@gmail.com>
+ *            (C)  2013 Paul Reioux <reioux@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -31,7 +32,11 @@
 #endif
 #include <linux/rq_stats.h>
 
-#define INTELLIDEMAND_VERSION	4.1
+#include <linux/syscalls.h>
+#include <linux/highuid.h>
+
+#define INTELLIDEMAND_MAJOR_VERSION	4
+#define INTELLIDEMAND_MINOR_VERSION	2
 
 /*
  * dbs is used in this file as a shortform for demandbased switching
@@ -57,10 +62,10 @@
 #define DBS_OPTIMAL_FREQ			(1296000)
 
 #ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-#define DBS_PERFLOCK_MIN_FREQ			(702000)
+#define DBS_PERFLOCK_MIN_FREQ			(594000)
 #endif
 
-u64 freq_boosted_time;
+static u64 freq_boosted_time;
 /*
  * The polling frequency of this governor depends on the capability of
  * the processor. Default polling frequency is 1000 times the transition
@@ -79,7 +84,7 @@ static unsigned long stored_sampling_rate;
 #endif
 
 #define LATENCY_MULTIPLIER			(1000)
-#define MIN_LATENCY_MULTIPLIER			(100)
+#define MIN_LATENCY_MULTIPLIER			(20)
 #define TRANSITION_LATENCY_LIMIT		(10 * 1000 * 1000)
 
 #define POWERSAVE_BIAS_MAXLEVEL			(1000)
@@ -87,15 +92,13 @@ static unsigned long stored_sampling_rate;
 
 /* have the timer rate booted for this much time 2.5s*/
 #define TIMER_RATE_BOOST_TIME 2500000
-int sampling_rate_boosted;
-u64 sampling_rate_boosted_time;
-unsigned int current_sampling_rate;
+static int sampling_rate_boosted;
+static u64 sampling_rate_boosted_time;
+static unsigned int current_sampling_rate;
 
 #ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-static unsigned int saved_policy_min;
+static unsigned int saved_policy_min = 0;
 #endif
-
-static unsigned int eco_mode_active = 0;
 
 static void do_dbs_timer(struct work_struct *work);
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
@@ -401,26 +404,6 @@ static ssize_t show_lmf_inactive_load(struct kobject *kobj,
 }
 #endif
 
-static ssize_t show_eco_mode(struct kobject *kobj,
-                                      struct attribute *attr, char *buf)
-{
-        return sprintf(buf, "%u\n", eco_mode_active);
-}
-
-static ssize_t store_eco_mode(struct kobject *kobj, struct attribute *attr,
-                                const char *buf, size_t count)
-{
-	unsigned int input;
-	int ret;
-
-	ret = sscanf(buf, "%u", &input);
-	if (ret != 1)
-		return -EINVAL;
-
-	eco_mode_active = input;
-	return count;
-}
-
 static ssize_t show_powersave_bias
 (struct kobject *kobj, struct attribute *attr, char *buf)
 {
@@ -448,8 +431,12 @@ static ssize_t store_boostpulse(struct kobject *kobj, struct attribute *attr,
 	unsigned long val;
 
 	ret = kstrtoul(buf, 0, &val);
-	if (ret < 0)
+	if (ret < 0) {
+		pr_err("Bad Boost reqeust!\n");
 		return ret;
+	}
+
+	//pr_info("Boost requested!\n");
 
 	dbs_tuners_ins.boosted = 1;
 	freq_boosted_time = ktime_to_us(ktime_get());
@@ -457,6 +444,7 @@ static ssize_t store_boostpulse(struct kobject *kobj, struct attribute *attr,
 	if (sampling_rate_boosted) {
 		sampling_rate_boosted = 0;
 		dbs_tuners_ins.sampling_rate = current_sampling_rate;
+		//pr_info("Boosted Sampling rate %u\n", current_sampling_rate);
 	}
 	return count;
 }
@@ -920,7 +908,6 @@ define_one_global_rw(boostpulse);
 define_one_global_rw(boosttime);
 define_one_global_rw(boostfreq);
 define_one_global_rw(two_phase_freq);
-define_one_global_rw(eco_mode);
 
 #ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
 define_one_global_rw(lmf_browser);
@@ -954,7 +941,6 @@ static struct attribute *dbs_attributes[] = {
 	&lmf_active_load.attr,
 	&lmf_inactive_load.attr,
 #endif
-	&eco_mode.attr,
 	NULL
 };
 
@@ -1223,9 +1209,10 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 				freq_next = dbs_tuners_ins.sync_freq;
 
 			if (max_load_freq >
-				 (dbs_tuners_ins.up_threshold_multi_core -
+				 ((dbs_tuners_ins.up_threshold_multi_core -
 				  dbs_tuners_ins.down_differential_multi_core) *
-				  policy->cur)
+				  policy->cur) &&
+				freq_next < dbs_tuners_ins.optimal_freq)
 				freq_next = dbs_tuners_ins.optimal_freq;
 
 		}
@@ -1343,61 +1330,9 @@ unsigned long get_lmf_inactive_load(void)
 }
 #endif
 
-#define NR_FSHIFT	3
-static unsigned int nr_fshift = NR_FSHIFT;
-static unsigned int nr_run_thresholds_full[] = {
-/* 	1,  2,  3,  4 - on-line cpus target */
-	5,  7,  9,  UINT_MAX /* avg run threads * 2 (e.g., 9 = 2.25 threads) */
-	};
-
-static unsigned int nr_run_thresholds_eco[] = {
-/*      1,  2, - on-line cpus target */
-        3,  UINT_MAX /* avg run threads * 2 (e.g., 9 = 2.25 threads) */
-        };
-
-static unsigned int nr_run_hysteresis = 4;  /* 0.5 thread */
-static unsigned int nr_run_last;
-
-static unsigned int calculate_thread_stats(void)
-{
-	unsigned int avg_nr_run = avg_nr_running();
-	unsigned int nr_run;
-	unsigned int threshold_size;
-
-	if (!eco_mode_active) {
-		threshold_size =  ARRAY_SIZE(nr_run_thresholds_full);
-		nr_run_hysteresis = 8;
-		nr_fshift = 3;
-		//pr_info("intelldemand: full mode active!");
-	}
-	else {
-		threshold_size =  ARRAY_SIZE(nr_run_thresholds_eco);
-		nr_run_hysteresis = 4;
-		nr_fshift = 1;
-		//pr_info("intelldemand: eco mode active!");
-	}
-
-	for (nr_run = 1; nr_run < threshold_size; nr_run++) {
-		unsigned int nr_threshold;
-		if (!eco_mode_active)
-			nr_threshold = nr_run_thresholds_full[nr_run - 1];
-		else
-			nr_threshold = nr_run_thresholds_eco[nr_run - 1];
-
-		if (nr_run_last <= nr_run)
-			nr_threshold += nr_run_hysteresis;
-		if (avg_nr_run <= (nr_threshold << (FSHIFT - nr_fshift)))
-			break;
-	}
-	nr_run_last = nr_run;
-
-	return nr_run;
-}
-
-static unsigned int persist_count = 0;
 static unsigned int rq_persist_count = 0;
 
-static void __ref do_dbs_timer(struct work_struct *work)
+static void do_dbs_timer(struct work_struct *work)
 {
 	struct cpu_dbs_info_s *dbs_info =
 		container_of(work, struct cpu_dbs_info_s, work.work);
@@ -1405,90 +1340,39 @@ static void __ref do_dbs_timer(struct work_struct *work)
 	int sample_type = dbs_info->sample_type;
 
 	int delay;
-	unsigned int nr_run_stat;
 #ifdef CONFIG_CPUFREQ_ID_PERFLOCK
 	struct cpufreq_policy *policy;
 
 	policy = dbs_info->cur_policy;
 #endif
 
-	nr_run_stat = calculate_thread_stats();
-	//pr_info("run stats: %u\n", nr_run_stat);
-
-#if 1
-	if (cpu == BOOT_CPU && lmf_screen_state) {
-		switch (nr_run_stat) {
-			case 1:
-				if (persist_count > 0)
-					persist_count--;
-
-				if (num_online_cpus() == 2 && persist_count == 0) {
-					cpu_down(1);
-#ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-					saved_policy_min = policy->min;
-					policy->min = DBS_PERFLOCK_MIN_FREQ;
-#endif
-				}
-				if (eco_mode_active) {
-					cpu_down(3);
-					cpu_down(2);
-				}
-				break;
-			case 2:
-				persist_count = 27;
-				if (num_online_cpus() == 1) {
-					cpu_up(1);
-#ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-					policy->min = saved_policy_min;
-#endif
-				} else {
-					cpu_down(3);
-					cpu_down(2);
-				}
-				break;
-			case 3:
-				persist_count = 21;
-				if (num_online_cpus() == 2) {
-					cpu_up(2);
-#ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-					policy->min = saved_policy_min;
-#endif
-				} else {
-					cpu_down(3);
-				}
-				break;
-			case 4:
-				persist_count = 15;
-				if (num_online_cpus() == 3) {
-					cpu_up(3);
-#ifdef CONFIG_CPUFREQ_ID_PERFLOCK
-					policy->min = saved_policy_min;
-#endif
-				}
-				break;
-			default:
-				pr_err("Run Stat Error: Bad value %u\n", nr_run_stat);
-				break;
-		}
-	}
 	if (num_online_cpus() >= 2 && rq_info.rq_avg > 38)
 		rq_persist_count++;
 	else
 		if (rq_persist_count > 0)
 			rq_persist_count--;
 
+#ifdef CONFIG_CPUFREQ_ID_PERFLOCK
+	if (cpu == 0) {
+		if (num_online_cpus() >= 2) {
+			if (saved_policy_min != 0)
+				policy->min = saved_policy_min;
+		} else if (num_online_cpus() == 1) {
+			saved_policy_min = policy->min;
+			policy->min = DBS_PERFLOCK_MIN_FREQ;
+		}
+	}
+#endif
+
+#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
 	if (rq_persist_count > 3) {
 		lmf_browsing_state = false;
 		rq_persist_count = 0;
 	}
 	else
 		lmf_browsing_state = true;
-
-#endif
-
 	//pr_info("Run Queue Average: %u\n", rq_info.rq_avg);
 
-#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
 	if (!lmf_browsing_state && lmf_screen_state)
 	{
 		if (cpu == BOOT_CPU)
@@ -1497,21 +1381,15 @@ static void __ref do_dbs_timer(struct work_struct *work)
 			{
 				pr_warn("LMF: disabled!\n");
 				lmf_old_state = false;
-#if 0
-				/* wake up the 2nd core */
-				if (num_online_cpus() < 2)
-					cpu_up(1);
-#endif
-
 			}
 
 			if (!active_state)
 			{
 				/* set freq to 1.5GHz */
-				pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_active_max_limit);
+				//pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_active_max_limit);
 				cpufreq_set_limits(BOOT_CPU, SET_MAX, lmf_active_max_limit);
 				
-				pr_info("LMF: CPUX set max freq to: %lu\n", lmf_active_max_limit);
+				//pr_info("LMF: CPUX set max freq to: %lu\n", lmf_active_max_limit);
 				if (cpu_online(NON_BOOT_CPU1) ||
 					cpu_online(NON_BOOT_CPU2) ||
 					cpu_online(NON_BOOT_CPU3)) {
@@ -1623,16 +1501,12 @@ static void __ref do_dbs_timer(struct work_struct *work)
 								msecs_limit_total = 0;
 								load_limit_index = 0;
 								active_state = false;
-#if 0
-								/* wake up the 2nd core */
-								if (num_online_cpus() < 2)
-									cpu_up(1);
-#endif
+
 								/* set freq to 1.0GHz */
-								pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_inactive_max_limit);
+								//pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_inactive_max_limit);
 								cpufreq_set_limits(BOOT_CPU, SET_MAX, lmf_inactive_max_limit);
 								
-								pr_info("LMF: CPUX set max freq to: %lu\n", lmf_inactive_max_limit);
+								//pr_info("LMF: CPUX set max freq to: %lu\n", lmf_inactive_max_limit);
 								if (cpu_online(NON_BOOT_CPU1) ||
 									cpu_online(NON_BOOT_CPU2) ||
 									cpu_online(NON_BOOT_CPU3)) {
@@ -1648,12 +1522,6 @@ static void __ref do_dbs_timer(struct work_struct *work)
 							else
 							{
 								msecs_limit_total = ACTIVE_DURATION_MSEC; // to prevent overflow
-#if 0
-								/* take 2nd core offline */
-								if (num_online_cpus() > 1)
-									cpu_down(1);
-#endif
-
 							}
 						}
 					}
@@ -1682,10 +1550,10 @@ static void __ref do_dbs_timer(struct work_struct *work)
 								active_state = true;
 
 								/* set freq to 1.5GHz */
-								pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_active_max_limit);
+								//pr_info("LMF: CPU0 set max freq to: %lu\n", lmf_active_max_limit);
 								cpufreq_set_limits(BOOT_CPU, SET_MAX, lmf_active_max_limit);
 								
-								pr_info("LMF: CPUX set max freq to: %lu\n", lmf_active_max_limit);
+								//pr_info("LMF: CPUX set max freq to: %lu\n", lmf_active_max_limit);
 								if (cpu_online(NON_BOOT_CPU1) ||
 									cpu_online(NON_BOOT_CPU2) ||
 									cpu_online(NON_BOOT_CPU3)) {
@@ -1786,6 +1654,21 @@ static int should_io_be_busy(void)
 #endif
 }
 
+#define	AID_SYSTEM	(1000)
+static void dbs_chown(void)
+{
+	int ret;
+
+	ret =
+	sys_chown("/sys/devices/system/cpu/cpufreq/intellidemand/sampling_rate",
+		low2highuid(AID_SYSTEM), low2highgid(0));
+	ret =
+	sys_chown("/sys/devices/system/cpu/cpufreq/intellidemand/boostpulse",
+		low2highuid(AID_SYSTEM), low2highgid(0));
+	if (ret)
+		pr_err("sys_chown: boostpulse error: %d", ret);
+}
+
 static void dbs_refresh_callback(struct work_struct *work)
 {
 	struct cpufreq_policy *policy;
@@ -1809,11 +1692,18 @@ static void dbs_refresh_callback(struct work_struct *work)
 	}
 
 	if (policy->cur < DBS_INPUT_EVENT_MIN_FREQ) {
+#if 0
+		pr_info("%s: set cpufreq to DBS_INPUT_EVENT_MIN_FREQ(%d) \
+			directly due to input events!\n", __func__, \
+			DBS_INPUT_EVENT_MIN_FREQ);
+#endif
 		/*
-		pr_info("%s: set cpufreq to DBS_INPUT_EVENT_MIN_FREQ(%d) directly due to input events!\n", __func__, DBS_INPUT_EVENT_MIN_FREQ);
-		*/
-		__cpufreq_driver_target(policy, DBS_INPUT_EVENT_MIN_FREQ,
-					CPUFREQ_RELATION_L);
+		 * Arch specific cpufreq driver may fail.
+		 * Don't update governor frequency upon failure.
+		 */
+		if (__cpufreq_driver_target(policy, DBS_INPUT_EVENT_MIN_FREQ,
+					CPUFREQ_RELATION_L) >= 0);
+			policy->cur = DBS_INPUT_EVENT_MIN_FREQ;
 		this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
 				&this_dbs_info->prev_cpu_wall);
 	}
@@ -1937,6 +1827,8 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		mutex_lock(&dbs_mutex);
 
+		dbs_chown();
+
 		dbs_enable++;
 		for_each_cpu(j, policy->cpus) {
 			struct cpu_dbs_info_s *j_dbs_info;
@@ -2006,10 +1898,10 @@ static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		this_dbs_info->cur_policy = NULL;
 		if (!cpu)
 			input_unregister_handler(&dbs_input_handler);
-		mutex_unlock(&dbs_mutex);
 		if (!dbs_enable)
 			sysfs_remove_group(cpufreq_global_kobject,
 					   &dbs_attr_group);
+		mutex_unlock(&dbs_mutex);
 
 		break;
 
