@@ -1650,8 +1650,6 @@ config GPU_OVERCLOCK_450
         help
           APQ8064 GPU overclocking to 450
 
-
-
 config CPU_OVERCLOCK
   bool "Enable CPU Overclocking option"
   default n

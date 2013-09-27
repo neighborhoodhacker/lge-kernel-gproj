@@ -148,6 +148,7 @@ static struct dbs_tuners {
 	unsigned int io_is_busy;
 	unsigned int input_boost;
 } dbs_tuners_ins = {
+	.sampling_rate = 10000,
 	.up_threshold_multi_core = DEF_FREQUENCY_UP_THRESHOLD,
 	.up_threshold = DEF_FREQUENCY_UP_THRESHOLD,
 	.sampling_down_factor = DEF_SAMPLING_DOWN_FACTOR,
