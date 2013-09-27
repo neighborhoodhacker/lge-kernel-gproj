@@ -51,9 +51,13 @@
 #define SECCLKAGD		BIT(4)
 
 #ifdef CONFIG_CPU_OVERCLOCK
-#define FREQ_TABLE_SIZE 37
+#ifdef CONFIG_OC_ULTIMATE
+#define FREQ_TABLE_SIZE 42
 #else
-#define FREQ_TABLE_SIZE 35
+#define FREQ_TABLE_SIZE 39
+#endif
+#else
+#define FREQ_TABLE_SIZE 37
 #endif
 
 int g_speed_bin;

@@ -1656,7 +1656,7 @@ config CPU_OVERCLOCK
   bool "Enable CPU Overclocking option"
   default n
   help
-   Krait overclocking up to 1.71 GHz
+   Krait overclocking up to 1.72 GHz
 
 config MSM_AVS_HW
 	bool "Enable Adaptive Voltage Scaling (AVS)"
