@@ -48,6 +48,12 @@ module_param(intelli_plug_active, uint, 0644);
 static unsigned int eco_mode_active = 0;
 module_param(eco_mode_active, uint, 0644);
 
+#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
+extern bool lmf_screen_state;
+#else
+bool lmf_screen_state = true;
+#endif
+
 static unsigned int persist_count = 0;
 static bool suspended = false;
 
@@ -125,7 +131,7 @@ static unsigned int calculate_thread_stats(void)
 	unsigned int nr_run;
 	unsigned int threshold_size;
 
-	if (!eco_mode_active) {
+	if (!eco_mode_active || !lmf_screen_state) {
 		threshold_size =  ARRAY_SIZE(nr_run_thresholds_full);
 		nr_run_hysteresis = 8;
 		nr_fshift = 3;
@@ -144,7 +150,7 @@ static unsigned int calculate_thread_stats(void)
 
 	for (nr_run = 1; nr_run < threshold_size; nr_run++) {
 		unsigned int nr_threshold;
-		if (!eco_mode_active)
+		if (!eco_mode_active || !lmf_screen_state)
 			nr_threshold = nr_run_thresholds_full[nr_run - 1];
 		else
 			nr_threshold = nr_run_thresholds_eco[nr_run - 1];
@@ -177,7 +183,7 @@ static void __cpuinit intelli_plug_work_fn(struct work_struct *work)
 		// detect artificial loads or constant loads
 		// using msm rqstats
 		nr_cpus = num_online_cpus();
-		if (!eco_mode_active && (nr_cpus >= 1 && nr_cpus < 4)) {
+		if ((!eco_mode_active || !lmf_screen_state) && (nr_cpus >= 1 && nr_cpus < 4)) {
 			decision = mp_decision();
 			if (decision) {
 				switch (nr_cpus) {
@@ -296,7 +302,7 @@ static void __cpuinit intelli_plug_late_resume(struct early_suspend *handler)
 	mutex_unlock(&intelli_plug_mutex);
 
 	/* wake up everyone */
-	if (eco_mode_active)
+	if (eco_mode_active || lmf_screen_state)
 		num_of_active_cores = 2;
 	else
 		num_of_active_cores = 4;
