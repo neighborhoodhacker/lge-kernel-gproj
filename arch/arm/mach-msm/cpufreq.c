@@ -427,14 +427,14 @@ static struct notifier_block __refdata msm_cpufreq_cpu_notifier = {
 	.notifier_call = msm_cpufreq_cpu_callback,
 };
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)||defined(CONFIG_INTELLI_PLUG)
+#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)
 extern bool lmf_screen_state;
 #endif
 
 static void msm_cpu_early_suspend(struct early_suspend *h)
 {
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)||defined(CONFIG_INTELLI_PLUG)
+#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)
   lmf_screen_state = false;
 #endif
 
@@ -443,7 +443,7 @@ static void msm_cpu_early_suspend(struct early_suspend *h)
 static void msm_cpu_late_resume(struct early_suspend *h)
 {
 
-#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)||defined(CONFIG_INTELLI_PLUG)
+#if defined(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND)
   lmf_screen_state = true;
 #endif
 
