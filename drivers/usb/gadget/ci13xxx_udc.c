@@ -2516,12 +2516,11 @@ __acquires(udc->lock)
 		err("EINVAL");
 		return;
 	}
-
 	for (i = 0; i < hw_ep_max; i++) {
 		struct ci13xxx_ep *mEp  = &udc->ci13xxx_ep[i];
-		int type, num, dir, err = -EINVAL;
+		int type, num, dir, uninitialized_var(err);
 		struct usb_ctrlrequest req;
-
+		err = -EINVAL;
 		if (mEp->desc == NULL)
 			continue;   /* not configured */
 
