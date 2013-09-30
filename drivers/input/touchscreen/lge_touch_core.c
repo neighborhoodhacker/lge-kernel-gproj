@@ -40,6 +40,10 @@
 #include <linux/input/sweep2wake.h>
 #endif 
 
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+#include <linux/input/knockknock.h>
+#endif 
+
 #ifdef CUST_G_TOUCH
 #include "./DS4/RefCode.h"
 #include "./DS4/RefCode_PDTScan.h"
@@ -947,6 +951,9 @@ static int touch_asb_input_report(struct lge_touch_data *ts, int status)
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
                        	 	detect_sweep2wake(ts->ts_data.curr_data[id].x_position, ts->ts_data.curr_data[id].y_position, ts);
 #endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+                       	 	detect_knock(ts->ts_data.curr_data[id].y_position);
+#endif
 
 				total++;
 
@@ -991,6 +998,11 @@ static int touch_asb_input_report(struct lge_touch_data *ts, int status)
                         barrier[0] = false;
 			barrier[1] = false;
 			scr_on_touch = false;
+		}
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+                if (knock_knock_enabled > 0) {
+                        new_knock = true;
 		}
 #endif
 	}
@@ -3970,8 +3982,11 @@ static void touch_early_suspend(struct early_suspend *h)
 	struct lge_touch_data *ts =
 			container_of(h, struct lge_touch_data, early_suspend);
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         scr_suspended = true;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+	scre_suspended = true;
 #endif
 
 	if (unlikely(touch_debug_mask & DEBUG_TRACE))
@@ -3981,8 +3996,8 @@ static void touch_early_suspend(struct early_suspend *h)
 		TOUCH_INFO_MSG("early_suspend is not executed\n");
 		return;
 	}
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        if (s2w_switch == 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (s2w_switch == 0 || knock_knock_enabled == 0) {
 #endif
 #ifdef CUST_G_TOUCH
 	if (ts->pdata->role->ghost_detection_enable) {
@@ -4008,8 +4023,8 @@ static void touch_early_suspend(struct early_suspend *h)
 	release_all_ts_event(ts);
 
 	touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        } else if (s2w_switch > 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        } else {
 		release_all_ts_event(ts);
 		enable_irq_wake(ts->client->irq);
         }
@@ -4024,8 +4039,12 @@ static void touch_late_resume(struct early_suspend *h)
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	int int_pin = 0;
 	int next_work = 0;
-
+#endif
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+	scre_suspended = false;
 #endif
 
 	if (unlikely(touch_debug_mask & DEBUG_TRACE))
@@ -4036,10 +4055,9 @@ static void touch_late_resume(struct early_suspend *h)
 		return;
 	}
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        if (s2w_switch == 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (s2w_switch == 0 || knock_knock_enabled == 0) {
 #endif
-
 	touch_power_cntl(ts, ts->pdata->role->resume_pwr);
 #ifdef CUST_G_TOUCH
 	if (ts->pdata->role->ghost_detection_enable) {
@@ -4058,8 +4076,8 @@ static void touch_late_resume(struct early_suspend *h)
 				msecs_to_jiffies(ts->pdata->role->booting_delay));
 	else
 		queue_delayed_work(touch_wq, &ts->work_init, 0);
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-        } else if (s2w_switch > 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        } else {
                 disable_irq_wake(ts->client->irq);
 		/* Interrupt pin check after IC init - avoid Touch lockup */
 		if (ts->pdata->role->operation_mode == INTERRUPT_MODE) {

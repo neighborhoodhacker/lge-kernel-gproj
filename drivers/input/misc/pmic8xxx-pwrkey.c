@@ -26,6 +26,9 @@
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 #include <linux/input/sweep2wake.h>
 #endif 
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+#include <linux/input/knockknock.h>
+#endif 
 
 #define PON_CNTL_1 0x1C
 #define PON_CNTL_PULL_UP BIT(7)
@@ -201,6 +204,10 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	sweep2wake_setdev(pwr);
 	printk(KERN_INFO "[sweep2wake]: set device %s\n", pwr->name);
+#endif 
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+	knock_knock_setdev(pwr);
+	printk(KERN_INFO "[knockknock]: set device %s\n", pwr->name);
 #endif 
 
 	err = request_any_context_irq(key_press_irq, pwrkey_press_irq,

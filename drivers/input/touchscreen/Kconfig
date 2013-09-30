@@ -999,5 +999,10 @@ config TOUCHSCREEN_SWEEP2WAKE
 	tristate "Sweep2Wake for touchscreens"
 	default n 
 
+config TOUCHSCREEN_KNOCK_KNOCK
+	tristate "Knock on for touchscreens"
+	default n 
+
+
 endif
 
