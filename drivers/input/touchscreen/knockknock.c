@@ -31,6 +31,7 @@
 
 /* Editables */
 #define DEFAULT_KNOCK_KNOCK_DELAY_MS          400
+#define DEFAULT_HEIGHT_TO_KNOCK               200
 #define MS_TO_NS(x)	               (x * 1E6L)
 #define DEBUG                                   1
 

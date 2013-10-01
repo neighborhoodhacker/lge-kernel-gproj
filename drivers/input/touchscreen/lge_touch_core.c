@@ -906,11 +906,12 @@ static int touch_asb_input_report(struct lge_touch_data *ts, int status)
 
 	if (status == FINGER_PRESSED) {
 		for (id = 0; id < ts->pdata->caps->max_id; id++) {
-			if (ts->pdata->role->key_type == TOUCH_SOFT_KEY
-					&& (ts->ts_data.curr_data[id].y_position
-						>= ts->pdata->caps->y_button_boundary))
-				continue;
-
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+                       	 detect_sweep2wake(ts->ts_data.curr_data[id].x_position, ts->ts_data.curr_data[id].y_position, ts);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+                       	 detect_knock(ts->ts_data.curr_data[id].y_position);
+#endif
 			if (ts->ts_data.curr_data[id].status == FINGER_PRESSED) {
 #if !defined(MT_PROTOCOL_A)
 				input_mt_slot(ts->input_dev, id);
@@ -947,13 +948,6 @@ static int touch_asb_input_report(struct lge_touch_data *ts, int status)
 #if defined(MT_PROTOCOL_A)
 				input_mt_sync(ts->input_dev);
 #endif	/* defined(MT_PROTOCOL_A) */
-				
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-                       	 	detect_sweep2wake(ts->ts_data.curr_data[id].x_position, ts->ts_data.curr_data[id].y_position, ts);
-#endif
-#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
-                       	 	detect_knock(ts->ts_data.curr_data[id].y_position);
-#endif
 
 				total++;
 
@@ -2188,10 +2182,10 @@ static void touch_work_func_b(struct work_struct *work)
 	struct lge_touch_data *ts =
 			container_of(work, struct lge_touch_data, work);
 
-	u8  i;
 	u8 op_mode = OP_NULL;
 	u16 tmp_button = KEY_NULL;
 	u16 id = 0;
+	u8 i = 0;
 	int ret = 0;
 
 	ret = touch_work_pre_proc(ts);
@@ -3560,30 +3554,18 @@ static ssize_t lge_touch_sweep2wake_show(struct device *dev,
 	return count;
 }
 
-static ssize_t lge_touch_sweep2wake_store(struct device *dev,
+static ssize_t lge_touch_sweep2wake_dump(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	unsigned int data;
-
-	if(sscanf(buf, "%u\n", &data) == 1) {
-		if (data == 1) {
-			pr_info("%s: enabled\n", __FUNCTION__);
-			s2w_switch = data;
-		}
-		else if (data == 0) {
-			pr_info("%s: disabled\n", __FUNCTION__);
-			s2w_switch = data;
-		}
-		else
-			pr_info("%s: bad value: %u\n", __FUNCTION__, data);
-	} else
-		pr_info("%s: unknown input!\n", __FUNCTION__);
+	if (buf[0] >= '0' && buf[0] <= '2' && buf[1] == '\n')
+                if (s2w_switch != buf[0] - '0')
+		        s2w_switch = buf[0] - '0';
 
 	return count;
 }
 
 static DEVICE_ATTR(sweep2wake, (S_IWUSR|S_IRUGO),
-	lge_touch_sweep2wake_show, lge_touch_sweep2wake_store);
+	lge_touch_sweep2wake_show, lge_touch_sweep2wake_dump);
 #endif
 
 static ssize_t lge_touch_attr_show(struct kobject *lge_touch_kobj, struct attribute *attr,
@@ -3634,6 +3616,10 @@ static struct sys_device lge_touch_sys_device = {
 	.id		= 0,
 	.cls	= &lge_touch_sys_class,
 };
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+static struct kobject *android_touch_kobj;
+#endif
 
 static int touch_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
@@ -3896,11 +3882,18 @@ static int touch_probe(struct i2c_client *client, const struct i2c_device_id *id
 	return 0;
 	
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	ret = sysfs_create_file(&ts->lge_touch_kobj, &dev_attr_sweep2wake.attr);
+	android_touch_kobj = kobject_create_and_add("android_touch", NULL) ;
+	if (android_touch_kobj == NULL) {
+		pr_debug("[lge_touch]%s: subsystem_register failed\n", __func__);
+		ret = -ENOMEM;
+		return ret;
+	}
+	ret = sysfs_create_file(android_touch_kobj, &dev_attr_sweep2wake.attr);
 	if (ret) {
 		printk(KERN_ERR "%s: sysfs_create_file failed\n", __func__);
 		return ret;
 	}
+	
 #endif
 
 err_lge_touch_sysfs_init_and_add:
@@ -3951,7 +3944,8 @@ static int touch_remove(struct i2c_client *client)
 	}
 #endif
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	sysfs_remove_file(&ts->lge_touch_kobj, &dev_attr_sweep2wake.attr);
+	sysfs_remove_file(android_touch_kobj, &dev_attr_sweep2wake.attr);
+	kobject_del(android_touch_kobj);
 #endif
 
 	kobject_del(&ts->lge_touch_kobj);
@@ -3996,8 +3990,11 @@ static void touch_early_suspend(struct early_suspend *h)
 		TOUCH_INFO_MSG("early_suspend is not executed\n");
 		return;
 	}
-#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
-        if (s2w_switch == 0 || knock_knock_enabled == 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+        if (s2w_switch == 0) {
+#endif
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (knock_knock_enabled == 0) {
 #endif
 #ifdef CUST_G_TOUCH
 	if (ts->pdata->role->ghost_detection_enable) {
@@ -4023,10 +4020,15 @@ static void touch_early_suspend(struct early_suspend *h)
 	release_all_ts_event(ts);
 
 	touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
-#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         } else {
+#endif
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        } else {
+#endif
 		release_all_ts_event(ts);
 		enable_irq_wake(ts->client->irq);
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)||defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         }
 #endif
 }
@@ -4055,8 +4057,11 @@ static void touch_late_resume(struct early_suspend *h)
 		return;
 	}
 
-#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
-        if (s2w_switch == 0 || knock_knock_enabled == 0) {
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+        if (s2w_switch == 0) {
+#endif
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (knock_knock_enabled == 0) {
 #endif
 	touch_power_cntl(ts, ts->pdata->role->resume_pwr);
 #ifdef CUST_G_TOUCH
@@ -4076,8 +4081,12 @@ static void touch_late_resume(struct early_suspend *h)
 				msecs_to_jiffies(ts->pdata->role->booting_delay));
 	else
 		queue_delayed_work(touch_wq, &ts->work_init, 0);
-#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)||defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         } else {
+#endif
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        } else {
+#endif
                 disable_irq_wake(ts->client->irq);
 		/* Interrupt pin check after IC init - avoid Touch lockup */
 		if (ts->pdata->role->operation_mode == INTERRUPT_MODE) {
@@ -4097,7 +4106,8 @@ static void touch_late_resume(struct early_suspend *h)
 				touch_ic_init(ts);
 			}
 		}
-	}
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)||defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+        }
 #endif
 }
 #endif
