@@ -4209,3 +4209,4 @@ void touch_driver_unregister(void)
 		destroy_workqueue(touch_wq);
 }
 
+

@@ -80,28 +80,23 @@ void knock_knock_pwrtrigger(void) {
         return;
 }
 
-/* Calculate uptime */
-long get_uptime_nanoseconds(void) {
-	struct timespec uptime;
-	do_posix_clock_monotonic_gettime(&uptime);
-	return uptime.tv_nsec;
-}
-
 /* Main work */
 void detect_knock(int touch_height) {
 	if(knock_knock_enabled > 0 && knocks == 1 && new_knock) {
 		if(scre_suspended) {
 			printk(KERN_INFO "[knockknock]: screen off");
 			knock_knock_pwrtrigger();
-			knocks = 0;
-			new_knock = false;
+			
 		} else {
 			// printk(KERN_INFO "[knockknock]: screen on");
 			// knock_knock_pwrtrigger();
-			// knocks = 0;
-			// new_knock = false;
 			/* Disabled while I develop a java reporting method for the status bar */
 		}
+		knocks = 0;
+		new_knock = false;
+	}
+	if (!knocks) {
+		knocks = 0;
 	}
 	if((knock_knock_enabled > 0) && (knocks == 0) && new_knock) {
 		knocks++;
