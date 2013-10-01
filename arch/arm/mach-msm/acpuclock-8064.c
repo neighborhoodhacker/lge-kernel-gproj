@@ -528,7 +528,7 @@ static struct acpu_level tbl_nom[] __initdata = {
 };
 
 static struct acpu_level tbl_fast[] __initdata = {
-        { 1, {   192000, PLL_8, 0, 0x00 }, L2(0),   675000 },
+        { 1, {   192000, PLL_8, 0, 0x00 }, L2(0),   750000 },
 	{ 1, {   384000, PLL_8, 0, 0x00 }, L2(0),   775000 },
 	{ 0, {   432000, HFPLL, 2, 0x20 }, L2(6),   800000 },
 	{ 1, {   486000, HFPLL, 2, 0x24 }, L2(6),   800000 },
