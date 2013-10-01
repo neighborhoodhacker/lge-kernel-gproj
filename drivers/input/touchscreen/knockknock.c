@@ -96,10 +96,11 @@ void detect_knock(int touch_height) {
 			knocks = 0;
 			new_knock = false;
 		} else {
-			printk(KERN_INFO "[knockknock]: screen on");
-			knock_knock_pwrtrigger();
-			knocks = 0;
-			new_knock = false;
+			// printk(KERN_INFO "[knockknock]: screen on");
+			// knock_knock_pwrtrigger();
+			// knocks = 0;
+			// new_knock = false;
+			/* Disabled while I develop a java reporting method for the status bar */
 		}
 	}
 	if((knock_knock_enabled > 0) && (knocks == 0) && new_knock) {

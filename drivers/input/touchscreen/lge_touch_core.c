@@ -3843,9 +3843,9 @@ static int touch_probe(struct i2c_client *client, const struct i2c_device_id *id
 		ts->accuracy_filter.ignore_pressure_gap = 5;
 		ts->accuracy_filter.delta_max = 30;
 		ts->accuracy_filter.max_pressure = 255;
-		ts->accuracy_filter.time_to_max_pressure = one_sec / 20;
-		ts->accuracy_filter.direction_count = one_sec / 6;
-		ts->accuracy_filter.touch_max_count = one_sec / 2;
+		ts->accuracy_filter.time_to_max_pressure = one_sec / 25;
+		ts->accuracy_filter.direction_count = one_sec / 8;
+		ts->accuracy_filter.touch_max_count = one_sec / 3;
 	}
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
@@ -3991,10 +3991,15 @@ static void touch_early_suspend(struct early_suspend *h)
 		return;
 	}
 #if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (knock_knock_enabled == 0||s2w_switch == 0) {
+#else
         if (s2w_switch == 0) {
 #endif
+#else
 #if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
         if (knock_knock_enabled == 0) {
+#endif
 #endif
 #ifdef CUST_G_TOUCH
 	if (ts->pdata->role->ghost_detection_enable) {
@@ -4022,9 +4027,10 @@ static void touch_early_suspend(struct early_suspend *h)
 	touch_power_cntl(ts, ts->pdata->role->suspend_pwr);
 #if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         } else {
-#endif
+#else
 #if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
         } else {
+#endif
 #endif
 		release_all_ts_event(ts);
 		enable_irq_wake(ts->client->irq);
@@ -4058,10 +4064,15 @@ static void touch_late_resume(struct early_suspend *h)
 	}
 
 #if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+        if (knock_knock_enabled == 0||s2w_switch == 0) {
+#else
         if (s2w_switch == 0) {
 #endif
+#else
 #if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
         if (knock_knock_enabled == 0) {
+#endif
 #endif
 	touch_power_cntl(ts, ts->pdata->role->resume_pwr);
 #ifdef CUST_G_TOUCH
@@ -4083,9 +4094,10 @@ static void touch_late_resume(struct early_suspend *h)
 		queue_delayed_work(touch_wq, &ts->work_init, 0);
 #if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         } else {
-#endif
-#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)
+#else
+#if defined(CONFIG_TOUCHSCREEN_KNOCK_KNOCK)&&!defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE)
         } else {
+#endif
 #endif
                 disable_irq_wake(ts->client->irq);
 		/* Interrupt pin check after IC init - avoid Touch lockup */
