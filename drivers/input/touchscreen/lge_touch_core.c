@@ -906,12 +906,6 @@ static int touch_asb_input_report(struct lge_touch_data *ts, int status)
 
 	if (status == FINGER_PRESSED) {
 		for (id = 0; id < ts->pdata->caps->max_id; id++) {
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-                       	 detect_sweep2wake(ts->ts_data.curr_data[id].x_position, ts->ts_data.curr_data[id].y_position, ts);
-#endif
-#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
-                       	 detect_knock(ts->ts_data.curr_data[id].y_position);
-#endif
 			if (ts->ts_data.curr_data[id].status == FINGER_PRESSED) {
 #if !defined(MT_PROTOCOL_A)
 				input_mt_slot(ts->input_dev, id);
@@ -1955,6 +1949,13 @@ static void touch_work_func_a(struct work_struct *work)
 	u8 id;
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        detect_sweep2wake(ts->ts_data.curr_data[0].x_position, ts->ts_data.curr_data[0].y_position, ts);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+        detect_knock(ts->ts_data.curr_data[id].y_position);
+#endif
+
 #ifdef CUST_G_TOUCH
 	if (ts->pdata->role->ghost_detection_enable) {
 		if(trigger_baseline==2){
@@ -2187,6 +2188,13 @@ static void touch_work_func_b(struct work_struct *work)
 	u16 id = 0;
 	u8 i = 0;
 	int ret = 0;
+	
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        detect_sweep2wake(ts->ts_data.curr_data[0].x_position, ts->ts_data.curr_data[0].y_position, ts);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+        detect_knock(ts->ts_data.curr_data[id].y_position);
+#endif
 
 	ret = touch_work_pre_proc(ts);
 	if (ret == -EIO)
@@ -2363,6 +2371,13 @@ static void touch_work_func_c(struct work_struct *work)
 			container_of(work, struct lge_touch_data, work);
 	u8 report_enable = 0;
 	int ret = 0;
+	
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+        detect_sweep2wake(ts->ts_data.curr_data[0].x_position, ts->ts_data.curr_data[0].y_position, ts);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_KNOCK_KNOCK
+        detect_knock(ts->ts_data.curr_data[id].y_position);
+#endif
 
 	ret = touch_work_pre_proc(ts);
 	if (ret == -EIO)
