@@ -95,9 +95,6 @@ void detect_knock(int touch_height) {
 		knocks = 0;
 		new_knock = false;
 	}
-	if (!knocks) {
-		knocks = 0;
-	}
 	if((knock_knock_enabled > 0) && (knocks == 0) && new_knock) {
 		knocks++;
 		new_knock = false;
