@@ -52,9 +52,6 @@ __asm__ __volatile__ (							\
 static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
 				 unsigned int len);
 
-static int msm_iommu_unmap_range(struct iommu_domain *domain, unsigned int va,
-				 unsigned int len);
-
 static inline void clean_pte(unsigned long *start, unsigned long *end,
 			     int redirect)
 {
@@ -87,12 +84,8 @@ static struct msm_iommu_remote_lock msm_iommu_remote_lock;
 static void _msm_iommu_remote_spin_lock_init(void)
 {
 	msm_iommu_remote_lock.lock = smem_alloc(SMEM_SPINLOCK_ARRAY, 32);
-
-	if (likely(msm_iommu_remote_lock.lock))
-		memset(msm_iommu_remote_lock.lock, 0,
-				sizeof(*msm_iommu_remote_lock.lock));
-	else
-		BUG();
+	memset(msm_iommu_remote_lock.lock, 0,
+			sizeof(*msm_iommu_remote_lock.lock));
 }
 
 void msm_iommu_remote_p0_spin_lock(void)
