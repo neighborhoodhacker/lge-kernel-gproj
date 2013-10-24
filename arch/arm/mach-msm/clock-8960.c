@@ -3524,7 +3524,12 @@ static struct clk_freq_tbl clk_tbl_gfx3d[] = {
 #ifdef CONFIG_GPU_OVERCLOCK
 	F_GFX3D(450000000, pll15, 1, 2),
 #if !defined(CONFIG_GPU_OVERCLOCK_450)
-	F_GFX3D(487500000, pll15, 1, 2),
+	F_GFX3D(477000000, pll15, 1, 2),
+        F_GFX3D(490500000, pll15, 1, 2),
+        F_GFX3D(504000000, pll15, 1, 2),
+        F_GFX3D(531000000, pll15, 1, 2),
+        F_GFX3D(558000000, pll15, 1, 2),
+        F_GFX3D(585000000, pll15, 1, 2),
 #endif
 #endif
 	F_END
@@ -3564,7 +3569,7 @@ static unsigned long fmax_gfx3d_8064[MAX_VDD_LEVELS] __initdata = {
 #ifdef CONFIG_GPU_OVERCLOCK_450
 	[VDD_DIG_HIGH] = 450000000
 #else
-	[VDD_DIG_HIGH] = 487500000
+	[VDD_DIG_HIGH] = 585000000
 #endif
 #else
 	[VDD_DIG_HIGH] = 400000000
